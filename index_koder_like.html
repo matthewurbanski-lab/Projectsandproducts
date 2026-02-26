@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Foundation Projects — Flashcard Flip</title>
+<style>
+  :root {
+    --basement: #9BBB59; /* green */
+    --crawlspace: #FFD966; /* yellow */
+    --slab: #4F81BD;       /* blue */
+    --ink: #111;
+    --muted: #666;
+    --bg: #f6f7fb;
+    --card: #fff;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+    color: var(--ink);
+    background: var(--bg);
+  }
+  .app { max-width: 900px; margin: 24px auto; padding: 16px; }
+  header {
+    display:flex; gap:12px; align-items:center; justify-content:space-between;
+    margin-bottom: 14px; flex-wrap: wrap;
+  }
+  .title { font-size: 20px; font-weight: 800; }
+  .controls { display:flex; gap:8px; flex-wrap: wrap; }
+  button, select {
+    padding: 10px 14px; border-radius: 12px; border: 1px solid #ccc;
+    background:#fff; font-weight:600; cursor:pointer;
+  }
+  button.primary { background:#000; color:#fff; border-color:#000; }
+  button.ghost { background:transparent; }
+  .hud { display:grid; grid-template-columns: repeat(4,1fr); gap:8px; margin-bottom:12px; }
+  .stat {
+    background: var(--card); border: 1px dashed #ddd; border-radius: 12px;
+    padding:10px; text-align:center; color:var(--muted);
+  }
+  .stat b { color: var(--ink); }
+  .stage { perspective: 1200px; }
+  .card {
+    position: relative; width: 100%; max-width: 780px; height: 360px;
+    margin: 0 auto; cursor: pointer;
+    outline: none;
+  }
+  .card-inner {
+    position: absolute; inset: 0;
+    transition: transform .5s ease;
+    transform-style: preserve-3d;
+  }
+  .card.flipped .card-inner { transform: rotateY(180deg); }
+  .face {
+    position: absolute; inset: 0; backface-visibility: hidden;
+    background: var(--card); border-radius: 18px; border:1px solid #e4e4e4;
+    box-shadow: 0 4px 22px rgba(0,0,0,.08); overflow:hidden;
+    display:flex; flex-direction:column;
+  }
+  .band { height: 10px; }
+  .band.basement { background: var(--basement); }
+  .band.crawlspace { background: var(--crawlspace); }
+  .band.slab { background: var(--slab); }
+  .content { padding: 16px 18px; display:flex; flex-direction:column; gap:10px; flex:1; }
+  .pill {
+    display:inline-block; padding:4px 10px; border-radius:999px;
+    border:1px solid #ddd; width:max-content; background:#fff; font-size:12px;
+  }
+  .prompt { font-size: 16px; color: var(--muted); }
+  .q { font-size: 22px; font-weight: 800; line-height: 1.25; }
+  .a-title { font-weight: 800; }
+  ul { margin: 6px 0 0 18px; }
+  .back { transform: rotateY(180deg); }
+  .footer { display:flex; gap:8px; justify-content:center; margin-top: 14px; flex-wrap: wrap; }
+  .hint { text-align:center; color: var(--muted); font-size: 14px; margin-top: 10px; }
+  @media (max-width: 640px) {
+    .card { height: 440px; }
+    .q { font-size: 20px; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="title">Foundation Projects — Flashcard Flip</div>
+    <div class="controls">
+      <select id="filter" aria-label="Filter by category">
+        <option value="All">All categories</option>
+        <option value="Basement">Basement only</option>
+        <option value="Crawlspace">Crawlspace only</option>
+        <option value="Slab">Slab only</option>
+      </select>
+      <button id="shuffle" class="ghost" type="button">Shuffle</button>
+      <button id="reset" class="ghost" type="button">Reset</button>
+    </div>
+  </header>
+
+  <div class="hud">
+    <div class="stat">Card <b id="pos">1</b>/<b id="total">15</b></div>
+    <div class="stat">Category <b id="cat">All</b></div>
+    <div class="stat">Known <b id="known">0</b></div>
+    <div class="stat">Unknown <b id="unknown">0</b></div>
+  </div>
+
+  <div class="stage">
+    <div id="card" class="card" aria-label="Flashcard (click to flip)" role="button" tabindex="0">
+      <div class="card-inner">
+        <!-- FRONT -->
+        <div class="face front">
+          <div id="bandFront" class="band"></div>
+          <div class="content">
+            <span id="pillFront" class="pill">Category</span>
+            <div class="prompt">Question</div>
+            <div id="question" class="q">Condition Observed …</div>
+            <div class="hint">Tap/click the card to flip</div>
+          </div>
+        </div>
+        <!-- BACK -->
+        <div class="face back">
+          <div id="bandBack" class="band"></div>
+          <div class="content">
+            <span id="pillBack" class="pill">Category</span>
+            <div class="prompt">Answer</div>
+            <div class="a"><span class="a-title">Project Recommended:</span> <span id="project"></span></div>
+            <div class="a-title" style="margin-top:6px;">Products Required for Project:</div>
+            <ul id="products"></ul>
+            <div class="hint">Tap/click the card to flip back</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">
+    <button id="prev" class="ghost" type="button">← Previous</button>
+    <button id="flip" class="primary" type="button">Flip</button>
+    <button id="next" class="ghost" type="button">Next →</button>
+    <button id="markKnown" class="ghost" type="button">Mark Known</button>
+    <button id="markUnknown" class="ghost" type="button">Mark Unknown</button>
+  </div>
+</div>
+
+<script>
+/* ---- DATA: 15 cards (Basement 7, Crawlspace 6, Slab 2) ---- */
+var DATA = [
+  /* Basement */
+  {id:1, category:"Basement",
+   condition:"Water or water signs on basement floor & walls.",
+   project:"Control Ground Water Seepage (CGWS)",
+   products:["Aquastop Basement Gutter","Aquastop Wall Liner","Aquastop Basement Triple"]},
+  {id:2, category:"Basement",
+   condition:"Efflorescence, damp walls, water stains.",
+   project:"Control Wall Moisture (CWM)",
+   products:["Aquastop Wall Liner","Aquastop Basement Air System"]},
+  {id:3, category:"Basement",
+   condition:"High humidity levels, musty smell, high moisture content in walls and/or framing.",
+   project:"Control The Environment (CTE)",
+   products:["Aquastop Wall Liner","Aquastop Basement Air System"]},
+  {id:4, category:"Basement",
+   condition:"Bowed basement walls, horizontal cracking in walls, tipping or shearing.",
+   project:"Permanently Stabilize Your Walls (PSYW)",
+   products:["SettleStop Wall Anchor","SettleStop Helical Wall Anchor","SettleStop IntelliBrace"]},
+  {id:5, category:"Basement",
+   condition:"Cracks in Sheetrock of interior walls, bouncy floors.",
+   project:"Permanently Stabilize Floor System (PSFF)",
+   products:["SettleStop Floor Supports","Supplemental Beam"]},
+  {id:6, category:"Basement",
+   condition:"Cracks in brick or block of exterior walls, separation of windows & doors from framing, separated frieze board.",
+   project:"Permanently Stabilize Perimeter Foundation (PSPF)",
+   products:["SettleStop Helical Pier","SettleStop Push Pier"]},
+  {id:7, category:"Basement",
+   condition:"Uneven concrete walkways, driveway, porch, or garage; tripping hazards or toe kicks.",
+   project:"Stabilize Your Concrete (SYC)",
+   products:["SettleStop PolyRenewal","SettleStop Slab Piers"]},
+  /* Crawlspace */
+  {id:8, category:"Crawlspace",
+   condition:"Water or water signs on crawl space floor & walls.",
+   project:"Control Ground Water Seepage (CGWS)",
+   products:["Aquastop CrawlDrain","Aquastop CrawlSpace Triple","Aquastop CrawlSpace Door System"]},
+  {id:9, category:"Crawlspace",
+   condition:"High humidity levels, musty smell, high moisture content in framing, failing/sagging insulation.",
+   project:"Control The Environment (CTE)",
+   products:["Aquastop CrawlSpace Triple","Aquastop CrawlSpace Air","Aquastop ExtremeBlock"]},
+  {id:10, category:"Crawlspace",
+   condition:"Floors cold in winter time, existing roll insulation in crawl space in disrepair, no insulation.",
+   project:"Properly Insulate Your Home (PIYH)",
+   products:["Aquastop ExtremeBlock"]},
+  {id:11, category:"Crawlspace",
+   condition:"Sloped, sunken, or shaky floors; cracked Sheetrock on interior walls; interior doors not opening/closing correctly.",
+   project:"Permanently Stabilize Floor System (PSFF)",
+   products:["SettleStop Floor Supports","Supplemental Beam","Sister Joists"]},
+  {id:12, category:"Crawlspace",
+   condition:"Cracks in Sheetrock of exterior walls, bouncy floors.",
+   project:"Permanently Stabilize Perimeter Foundation (PSPF)",
+   products:["SettleStop Helical Piers","SettleStop Push Piers"]},
+  {id:13, category:"Crawlspace",
+   condition:"Uneven concrete walkways, driveway, porch, or garage; tripping hazards or toe kicks.",
+   project:"Stabilize Your Concrete (SYC)",
+   products:["SettleStop PolyRenewal","SettleStop Slab Piers"]},
+  /* Slab */
+  {id:14, category:"Slab",
+   condition:"Cracks in brick or block of exterior walls, separation of windows & doors from framing, separated frieze board.",
+   project:"Permanently Stabilize Perimeter Foundation (PSPF)",
+   products:["SettleStop Helical Pier","SettleStop Push Pier"]},
+  {id:15, category:"Slab",
+   condition:"Uneven concrete walkways, driveway, porch, or garage; tripping hazards or toe kicks.",
+   project:"Stabilize Your Concrete (SYC)",
+   products:["SettleStop PolyRenewal","SettleStop Slab Piers"]}
+];
+
+/* ---- Helpers (ES5 for compatibility) ---- */
+function shuffle(array) {
+  for (var i = array.length - 1; i > 0; i--) {
+    var j = Math.floor(Math.random() * (i + 1));
+    var tmp = array[i]; array[i] = array[j]; array[j] = tmp;
+  }
+  return array;
+}
+function colorClass(category) {
+  if (category === 'Basement') return 'basement';
+  if (category === 'Crawlspace') return 'crawlspace';
+  if (category === 'Slab') return 'slab';
+  return '';
+}
+
+/* ---- State ---- */
+var deck = DATA.slice();
+var index = 0;
+var knownIds = {};
+var unknownIds = {};
+
+/* ---- Elements ---- */
+var posEl = document.getElementById('pos');
+var totalEl = document.getElementById('total');
+var catHUD = document.getElementById('cat');
+var knownEl = document.getElementById('known');
+var unknownEl = document.getElementById('unknown');
+
+var filterSel = document.getElementById('filter');
+var shuffleBtn = document.getElementById('shuffle');
+var resetBtn = document.getElementById('reset');
+
+var cardEl = document.getElementById('card');
+var bandFront = document.getElementById('bandFront');
+var bandBack = document.getElementById('bandBack');
+var pillFront = document.getElementById('pillFront');
+var pillBack = document.getElementById('pillBack');
+var questionEl = document.getElementById('question');
+var projectEl = document.getElementById('project');
+var productsEl = document.getElementById('products');
+
+var prevBtn = document.getElementById('prev');
+var flipBtn = document.getElementById('flip');
+var nextBtn = document.getElementById('next');
+var markKnownBtn = document.getElementById('markKnown');
+var markUnknownBtn = document.getElementById('markUnknown');
+
+/* ---- Rendering ---- */
+function setBands(category) {
+  var cls = colorClass(category);
+  bandFront.className = 'band ' + cls;
+  bandBack.className = 'band ' + cls;
+}
+function updateHUD() {
+  var k = 0, u = 0, id;
+  for (id in knownIds) if (knownIds.hasOwnProperty(id)) k++;
+  for (id in unknownIds) if (unknownIds.hasOwnProperty(id)) u++;
+  knownEl.textContent = k;
+  unknownEl.textContent = u;
+}
+function render() {
+  if (!deck.length) return;
+  var item = deck[index];
+  setBands(item.category);
+  pillFront.textContent = item.category;
+  pillBack.textContent = item.category;
+  questionEl.textContent = 'Condition Observed: ' + item.condition;
+  projectEl.textContent = item.project;
+
+  var html = '';
+  for (var i=0; i<item.products.length; i++) {
+    html += '<li>' + item.products[i] + '</li>';
+  }
+  productsEl.innerHTML = html;
+
+  posEl.textContent = (index + 1);
+  totalEl.textContent = deck.length;
+  cardEl.classList.remove('flipped');
+}
+
+/* ---- Actions ---- */
+function applyFilter() {
+  var f = filterSel.value;
+  catHUD.textContent = f;
+
+  if (f === 'All') deck = DATA.slice();
+  else {
+    deck = [];
+    for (var i=0;i<DATA.length;i++) {
+      if (DATA[i].category === f) deck.push(DATA[i]);
+    }
+  }
+
+  shuffle(deck);
+  index = 0;
+  knownIds = {}; unknownIds = {};
+  updateHUD();
+  render();
+}
+
+/* ---- Event Listeners ---- */
+function toggleFlip() {
+  cardEl.classList.toggle('flipped');
+}
+
+cardEl.addEventListener('click', function () {
+  toggleFlip();
+});
+
+// Use keydown and prevent page scroll on Space
+cardEl.addEventListener('keydown', function (e) {
+  var key = e.key || e.keyCode;
+  if (key === ' ' || key === 'Enter' || key === 32 || key === 13) {
+    e.preventDefault();
+    toggleFlip();
+  }
+});
+
+flipBtn.addEventListener('click', function () { toggleFlip(); });
+nextBtn.addEventListener('click', function () {
+  index = (index + 1) % deck.length;
+  render();
+});
+prevBtn.addEventListener('click', function () {
+  index = (index - 1 + deck.length) % deck.length;
+  render();
+});
+markKnownBtn.addEventListener('click', function () {
+  var id = deck[index].id;
+  delete unknownIds[id];
+  knownIds[id] = true;
+  updateHUD();
+});
+markUnknownBtn.addEventListener('click', function () {
+  var id = deck[index].id;
+  delete knownIds[id];
+  unknownIds[id] = true;
+  updateHUD();
+});
+filterSel.addEventListener('change', applyFilter);
+shuffleBtn.addEventListener('click', function () { shuffle(deck); index = 0; render(); });
+resetBtn.addEventListener('click', applyFilter);
+
+/* ---- Init ---- */
+applyFilter();
+</script>
+</body>
+</html>
